@@ -20,8 +20,19 @@ type ServerInfo struct {
 func main() {
 	// Should be in format `http://127.0.0.1:9010`
 	host, ok := os.LookupEnv("ENVOY_ADMIN_API")
-	if ok && os.Getenv("START_WITHOUT_ENVOY") != "true" {
-		block(host)
+
+	// Should be in format `http://127.0.0.1:9010/healthz/ready`
+	healthApi, healthOk := os.LookupEnv("ENVOY_HEALTH_API")
+
+	if (ok || healthOk) && os.Getenv("START_WITHOUT_ENVOY") != "true" {
+		// if health api is set, use that, otherwise use the admin api
+		var url string
+		if healthOk {
+			url = healthApi
+		} else {
+			url = fmt.Sprintf("%s/server_info", host)
+		}
+		block(url)
 	}
 
 	killAPI, killOk := os.LookupEnv("ENVOY_KILL_API")
@@ -83,12 +94,10 @@ func main() {
 	os.Exit(exitCode)
 }
 
-func block(host string) {
+func block(url string) {
 	if os.Getenv("START_WITHOUT_ENVOY") == "true" {
 		return
 	}
-
-	url := fmt.Sprintf("%s/server_info", host)
 
 	b := backoff.NewExponentialBackOff()
 	// We wait forever for envoy to start. In practice k8s will kill the pod if we take too long.
